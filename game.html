@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>8-Queens CSP Visualizer — PECST522</title>
+<link rel="canonical" href="https://kiranvk.me/ai/8queens/">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1a1a2e;
+  --bg2: #16213e;
+  --bg3: #0f3460;
+  --accent: #d4a853;
+  --accent2: #e8c77b;
+  --text: #e8e8e8;
+  --text-dim: #a0a0b0;
+  --danger: #e74c3c;
+  --success: #2ecc71;
+  --board-light: #b58863;
+  --board-dark: #6d4c2a;
+  --threat: rgba(231, 76, 60, 0.35);
+  --fc-gray: rgba(100, 100, 120, 0.5);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+html { font-size: 16px; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+}
+
+/* Header */
+header {
+  text-align: center;
+  padding: 1.2rem 1rem 0.8rem;
+  background: linear-gradient(135deg, var(--bg2), var(--bg3));
+  border-bottom: 2px solid var(--accent);
+}
+header h1 {
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+header .subtitle {
+  font-size: clamp(0.75rem, 2vw, 0.95rem);
+  color: var(--text-dim);
+  margin-top: 0.2rem;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0;
+  background: var(--bg2);
+  border-bottom: 1px solid rgba(212,168,83,0.3);
+  padding: 0;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  padding: 0.7rem 1rem;
+  font-size: clamp(0.7rem, 2vw, 0.9rem);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  font-family: var(--font);
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); background: rgba(212,168,83,0.08); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(212,168,83,0.1); }
+
+/* Main */
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+}
+.mode-panel { display: none; width: 100%; max-width: 1100px; }
+.mode-panel.active { display: block; }
+
+/* Board */
+.board-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+.board-wrap { position: relative; }
+.board {
+  display: grid;
+  gap: 0;
+  border: 3px solid var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.cell {
+  width: clamp(36px, 8vw, 60px);
+  height: clamp(36px, 8vw, 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s;
+  font-size: clamp(20px, 5vw, 36px);
+  user-select: none;
+}
+.cell.light { background: var(--board-light); }
+.cell.dark { background: var(--board-dark); }
+.cell.threatened::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--threat);
+  pointer-events: none;
+}
+.cell.fc-eliminated::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--fc-gray);
+  pointer-events: none;
+}
+.cell.fc-eliminated::before {
+  content: '×';
+  position: absolute;
+  color: rgba(255,255,255,0.3);
+  font-size: 14px;
+  font-weight: bold;
+  pointer-events: none;
+}
+.cell .queen {
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  transition: transform 0.2s;
+}
+.cell .queen.place-anim { animation: placeQueen 0.3s ease-out; }
+@keyframes placeQueen { from { transform: scale(0); } to { transform: scale(1); } }
+.cell.backtrack-flash { animation: flashRed 0.4s; }
+@keyframes flashRed {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: inset 0 0 20px rgba(231,76,60,0.8); }
+}
+.cell.current-col { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* Sidebar / CSP Panel */
+.sidebar {
+  background: var(--bg2);
+  border: 1px solid rgba(212,168,83,0.2);
+  border-radius: 8px;
+  padding: 1rem;
+  min-width: 240px;
+  max-width: 320px;
+  font-size: 0.85rem;
+}
+.sidebar h3 {
+  color: var(--accent);
+  font-size: 1rem;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(212,168,83,0.2);
+  padding-bottom: 0.4rem;
+}
+.sidebar .csp-section { margin-bottom: 0.8rem; }
+.sidebar .csp-section h4 {
+  color: var(--accent2);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.3rem;
+}
+.sidebar .csp-section p, .sidebar .csp-section div {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.sidebar .assignment-live {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 0.3rem;
+}
+.sidebar .assignment-live .asgn {
+  background: rgba(212,168,83,0.15);
+  border: 1px solid rgba(212,168,83,0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  color: var(--accent2);
+}
+.sidebar .domain-info {
+  margin-top: 0.3rem;
+}
+.sidebar .domain-info .dom-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 1px 0;
+}
+.sidebar .domain-info .dom-row .dom-label { color: var(--text-dim); }
+.sidebar .domain-info .dom-row .dom-val { color: var(--accent); font-weight: 600; }
+
+/* Controls */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+}
+.btn {
+  background: rgba(212,168,83,0.15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  transition: all 0.2s;
+}
+.btn:hover { background: rgba(212,168,83,0.3); }
+.btn:active { transform: scale(0.97); }
+.btn.primary { background: var(--accent); color: var(--bg); font-weight: 600; }
+.btn.primary:hover { background: var(--accent2); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.active-toggle { background: var(--accent); color: var(--bg); }
+
+.size-btns { display: flex; gap: 0.3rem; }
+.size-btn {
+  background: rgba(212,168,83,0.1);
+  border: 1px solid rgba(212,168,83,0.3);
+  color: var(--text-dim);
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  transition: all 0.2s;
+}
+.size-btn:hover { border-color: var(--accent); color: var(--accent); }
+.size-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+
+/* Counters */
+.counter {
+  text-align: center;
+  margin: 0.5rem 0;
+  font-size: 1rem;
+}
+.counter .conflict-count { color: var(--danger); font-weight: 700; }
+.counter .solved { color: var(--success); font-weight: 700; font-size: 1.2rem; }
+.stats-row {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+}
+.stats-row .stat { color: var(--text-dim); }
+.stats-row .stat span { color: var(--accent); font-weight: 600; }
+
+/* Speed slider */
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.speed-control input[type="range"] {
+  width: 100px;
+  accent-color: var(--accent);
+}
+
+/* Comparison table */
+.comp-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.85rem;
+}
+.comp-table th, .comp-table td {
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(212,168,83,0.15);
+}
+.comp-table th {
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+.comp-table td { color: var(--text-dim); }
+.comp-table tr:hover td { color: var(--text); }
+
+/* Bar chart */
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5rem;
+  justify-content: center;
+  height: 200px;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-bottom: 1px solid rgba(212,168,83,0.2);
+}
+.bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+.bar {
+  width: 40px;
+  background: linear-gradient(to top, var(--accent), var(--accent2));
+  border-radius: 3px 3px 0 0;
+  transition: height 0.5s ease;
+  min-height: 4px;
+  position: relative;
+}
+.bar .bar-val {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.bar-label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-align: center;
+  max-width: 60px;
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 0.8rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border-top: 1px solid rgba(212,168,83,0.15);
+  background: var(--bg2);
+}
+
+/* Mode 4 full CSP */
+.csp-full {
+  background: var(--bg2);
+  border: 1px solid rgba(212,168,83,0.2);
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 700px;
+  margin: 0 auto;
+}
+.csp-full h3 { color: var(--accent); margin-bottom: 0.8rem; }
+.csp-full .csp-block { margin-bottom: 1rem; }
+.csp-full .csp-block h4 {
+  color: var(--accent2);
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+.csp-full .csp-block code {
+  display: block;
+  background: rgba(0,0,0,0.3);
+  padding: 0.5rem 0.8rem;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .board-container { flex-direction: column; align-items: center; }
+  .sidebar { max-width: 100%; min-width: 0; width: 100%; }
+  .tab-btn { padding: 0.5rem 0.6rem; font-size: 0.7rem; }
+  .cell { width: clamp(32px, 10vw, 48px); height: clamp(32px, 10vw, 48px); }
+  .bar-chart { height: 150px; gap: 0.8rem; }
+  .bar { width: 28px; }
+}
+
+/* Instructions panels */
+.instructions { margin: 0.75rem 0 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.3); border-radius: 8px; padding: 0.5rem 0.75rem; }
+.instructions summary { cursor: pointer; color: #d4a853; font-weight: 600; font-size: 0.9rem; }
+.instructions-content { margin-top: 0.5rem; font-size: 0.85rem; color: #a0a0b0; line-height: 1.6; }
+.instructions-content p { margin-bottom: 0.4rem; }
+.instructions-content strong { color: #e0e0e0; }
+.goal-box { margin: 0.5rem 0 1rem; padding: 0.6rem 1rem; background: rgba(46, 204, 113, 0.08); border: 1px solid rgba(46, 204, 113, 0.3); border-radius: 8px; font-size: 0.9rem; color: #c0c0d0; }
+.goal-box strong { color: #2ecc71; }
+</style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-EYL7B293KM"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-EYL7B293KM');
+</script>
+<!-- Matomo (self-hosted, cookieless) kvk-matomo -->
+<script>
+  var _paq = window._paq = window._paq || [];
+  _paq.push(['disableCookies']);
+  _paq.push(['setDoNotTrack', true]);
+  _paq.push(['trackPageView']);
+  _paq.push(['enableLinkTracking']);
+  (function() {
+    var u = 'https://kiranvk.me/analytics/';
+    _paq.push(['setTrackerUrl', u + 'matomo.php']);
+    _paq.push(['setSiteId', '1']);
+    var d = document, g = d.createElement('script'), s = d.getElementsByTagName('script')[0];
+    g.async = true; g.src = u + 'matomo.js'; s.parentNode.insertBefore(g, s);
+  })();
+</script>
+<noscript><img referrerpolicy="no-referrer-when-downgrade" src="https://kiranvk.me/analytics/matomo.php?idsite=1&amp;rec=1" style="border:0" alt="" /></noscript>
+<!-- /kvk-matomo -->
+</head>
+<body>
+<!-- ═══ wrap:v2-theme ═══ -->
+<!-- v2-theme.html — full UX takeover for deep-linked apps. Overrides the
+     app's own theme tokens (--bg, --text, fonts) with v2's paper aesthetic,
+     while preserving game logic and DOM. Uses CSS custom-property re-declare
+     so ANY selector using var(--bg) etc. now paints in paper tones.
+     Safe: reduced-motion respected, print-safe, mobile-safe. -->
+<style id="v2-theme-style">
+  :root {
+    /* --- v2 palette (paper + brick + ink) overrides whatever the app declared --- */
+    --bg:  #f5f0e6 !important;
+    --bg2: #ede4d0 !important;
+    --bg3: #e4d8bf !important;
+    --text:     #1a1614 !important;
+    --text-dim: #5a4f42 !important;
+    --line:     #d9cbb0 !important;
+    --accent:   #c14a2b !important;
+    --accent2:  #a83a1e !important;
+
+    /* Wumpus-specific cell tokens (override game.html's dark navy) */
+    --cell-unvisited: #ede4d0 !important;
+    --cell-visited:   #f5eeda !important;
+    --cell-current:   #fdf3d6 !important;
+    --flag-safe: #3a7d3a !important;
+    --flag-pit:  #c14a2b !important;
+    --flag-w:    #7c3aed !important;
+
+    /* fonts */
+    --font: 'Instrument Serif', Georgia, 'Times New Roman', serif !important;
+    --mono: 'JetBrains Mono', 'Courier New', monospace !important;
+  }
+
+  /* Belt-and-braces: some apps hardcode colors instead of using vars */
+  html, body {
+    background: #f5f0e6 !important;
+    color: #1a1614 !important;
+    font-family: 'Instrument Serif', Georgia, serif !important;
+  }
+  body * {
+    /* Only kill hard-coded dark-navy backgrounds; leave whites, warms, and canvas alone */
+  }
+
+  /* Common dark-theme culprits from the AI games */
+  header, .card, .world, pre.rules, section, article, aside, nav, main, footer,
+  input[type=text], input[type=password], input[type=number], textarea, select {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    border-color: var(--line) !important;
+  }
+  header {
+    background: linear-gradient(180deg, #f5f0e6, #ede4d0) !important;
+    border-bottom: 1px solid var(--accent) !important;
+  }
+  .card {
+    background: #fdf9ef !important;
+    border: 1px solid var(--line) !important;
+  }
+  pre, code, kbd, samp, .mono {
+    font-family: var(--mono) !important;
+    background: #fdf9ef !important;
+    color: #2a2320 !important;
+  }
+  button, .btn {
+    background: var(--bg2) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--accent) !important;
+    font-family: var(--font) !important;
+  }
+  button.primary, button.accent {
+    background: var(--accent) !important;
+    color: #fdf9ef !important;
+    border-color: var(--accent2) !important;
+    font-weight: 700 !important;
+  }
+  button:hover { background: var(--accent) !important; color: #fdf9ef !important; }
+  .badge, .tag, .chip {
+    background: rgba(193, 74, 43, 0.08) !important;
+    color: var(--accent) !important;
+    border: 1px solid rgba(193, 74, 43, 0.3) !important;
+  }
+  a { color: var(--accent) !important; }
+  a:hover { color: var(--accent2) !important; }
+
+  /* Wumpus grid — pixel-precise tile overrides (bypass --cell-* vars entirely) */
+  #board .cell { background: #ede4d0 !important; color: #1a1614 !important; border-color: #d9cbb0 !important; }
+  #board .cell.visited { background: #f5eeda !important; }
+  #board .cell.current { background: #fdf3d6 !important; border-color: #c14a2b !important; }
+  #board .cell .coord { color: #5a4f42 !important; }
+  #board .cell .p span { background: rgba(193,74,43,0.10) !important; color: #a83a1e !important; }
+  #board.board, #board { background: #d9cbb0 !important; }
+  /* kvk-board-fix: re-assert chess board colours. The generic .cell/.board rules
+     above are Wumpus-specific and collapse light/dark squares to one flat beige. */
+  [id^="board"] .cell.light { background: var(--board-light) !important; }
+  [id^="board"] .cell.dark  { background: var(--board-dark)  !important; }
+  [id^="board"] .cell.light, [id^="board"] .cell.dark { border-color: rgba(0,0,0,.18) !important; }
+  [id^="board"] { background: transparent !important; }
+  /* queen: dark on light squares, light on dark squares — readable on both */
+  [id^="board"] .cell.light .queen { color: #241a12 !important; text-shadow: 0 1px 1px rgba(255,255,255,.35); }
+  [id^="board"] .cell.dark  .queen { color: #f7f2e7 !important; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+  .world { background: #f5f0e6 !important; border-color: #d9cbb0 !important; }
+  .world b { color: #c14a2b !important; }
+
+  /* Preserve canvas/svg/img rendering — don't touch game-content pixels */
+  canvas, svg, img, video { background: transparent !important; }
+
+  /* Type scale nudge toward v2 */
+  h1, h2, h3 { font-family: 'Instrument Serif', Georgia, serif !important; font-weight: 400 !important; letter-spacing: -0.01em !important; }
+  h1 { color: var(--text) !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
+  }
+</style>
+
+
+
+
+
+<!-- ═══ wrap:v2-bar ═══ -->
+<!-- v2-bar.html — slim v2-styled top bar injected into deep-linked game apps
+     so they feel continuous with the new site. Loads its own font/color
+     tokens so it works even on pages with no shared CSS. -->
+<style id="v2-bar-style">
+  :root { --v2b-ink:#1a1614; --v2b-paper:#f5f0e6; --v2b-accent:#c14a2b; --v2b-line:#e4dbcb; }
+  #v2-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    background: rgba(245,240,230,.92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--v2b-line);
+    font-family: 'Instrument Serif', Georgia, serif; color: var(--v2b-ink);
+    font-size: 16px; letter-spacing: -.005em;
+  }
+  #v2-bar .wm { font-weight: 400; font-size: 18px; text-decoration: none; color: var(--v2b-ink); }
+  #v2-bar .wm span { color: var(--v2b-accent); }
+  #v2-bar .sep { color: #b6a892; margin: 0 2px; }
+  #v2-bar a.up { text-decoration: none; color: var(--v2b-ink); border-bottom: 1px dashed transparent; padding: 2px 0; transition: border-color .15s; }
+  #v2-bar a.up:hover { border-bottom-color: var(--v2b-accent); }
+  #v2-bar .spacer { flex: 1; }
+  #v2-bar .search-link { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--v2b-ink); text-decoration: none; padding: 4px 10px; border: 1px solid var(--v2b-line); border-radius: 999px; }
+  #v2-bar .search-link:hover { border-color: var(--v2b-accent); color: var(--v2b-accent); }
+  body { padding-top: 46px !important; }
+  @media (max-width: 500px) { #v2-bar { font-size: 14px; padding: 8px 12px; } #v2-bar .search-link { display: none; } }
+  @media print { #v2-bar { display: none; } body { padding-top: 0 !important; } }
+</style>
+<div id="v2-bar" role="banner">
+  <a class="wm" href="/">kvk<span>.</span></a>
+  <span class="sep">/</span>
+  <a class="up" href="/games">Games</a>
+  <div class="spacer"></div>
+  <a class="search-link" href="/search">Search ⌘K</a>
+</div>
+
+
+<header>
+  <h1>♛ 8-Queens CSP Visualizer</h1>
+  <div class="subtitle">PECST522 — Artificial Intelligence | KTU 2024</div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-mode="1">Mode 1: Free Play</button>
+  <button class="tab-btn" data-mode="2">Mode 2: Backtracking</button>
+  <button class="tab-btn" data-mode="3">Mode 3: Forward Check</button>
+  <button class="tab-btn" data-mode="4">Mode 4: CSP Panel</button>
+  <button class="tab-btn" data-mode="5">Mode 5: Compare</button>
+</nav>
+
+<main>
+  <!-- MODE 1: Free Play -->
+  <div class="mode-panel active" id="mode1">
+    <details class="instructions">
+      <summary>📖 How to Play</summary>
+      <div class="instructions-content">
+        <p><strong>Objective:</strong> Place N queens on the board so that no two queens attack each other (no shared row, column, or diagonal).</p>
+        <p><strong>Rules:</strong> Click any cell to place a queen. Click again to remove it. Red highlighted cells show threatened positions. The conflict counter shows how many queen pairs are attacking each other. Solve it when conflicts = 0.</p>
+        <p><strong>AI Concept:</strong> This is a Constraint Satisfaction Problem (CSP). Variables = queen positions, Domain = row numbers, Constraints = no two queens share a row, column, or diagonal.</p>
+      </div>
+    </details>
+    <div class="goal-box">
+      🎯 <strong>Goal:</strong> Place all N queens so that <em>no two queens attack each other</em> — no shared row, column, or diagonal. Conflicts counter shows 0 when you've solved it!
+    </div>
+    <div class="controls">
+      <div class="size-btns">
+        <button class="size-btn" data-size="4">4-Queen</button>
+        <button class="size-btn" data-size="6">6-Queen</button>
+        <button class="size-btn active" data-size="8">8-Queen</button>
+      </div>
+      <button class="btn" id="clearBoard">Clear</button>
+    </div>
+    <div class="counter" id="mode1Counter">
+      <span class="conflict-count">0 conflicts remaining</span>
+    </div>
+    <div class="board-container">
+      <div class="board-wrap">
+        <div class="board" id="board1"></div>
+      </div>
+      <div class="sidebar" id="cspSidebar1">
+        <h3>CSP Formulation</h3>
+        <div class="csp-section">
+          <h4>Variables</h4>
+          <div id="cspVars1"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Domains</h4>
+          <div id="cspDoms1"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Constraints</h4>
+          <div id="cspCons1"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Current Assignment</h4>
+          <div class="assignment-live" id="cspAssign1"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE 2: Backtracking -->
+  <div class="mode-panel" id="mode2">
+    <details class="instructions">
+      <summary>📖 How to Play</summary>
+      <div class="instructions-content">
+        <p><strong>Objective:</strong> Watch how backtracking search solves the N-Queens problem automatically.</p>
+        <p><strong>Rules:</strong> The algorithm places one queen per column from left to right. If it can't find a valid row, it backtracks (undoes the last placement and tries the next option). Use "Step" for manual control or "Auto" with the speed slider.</p>
+        <p><strong>AI Concept:</strong> Backtracking = systematic trial and error with early failure detection. It explores the search tree depth-first, pruning branches that violate constraints.</p>
+      </div>
+    </details>
+    <div class="goal-box">
+      👀 <strong>Watch for:</strong> Red flashes = backtrack (failed placement undone). Counter shows total attempts vs backtracks. Fewer backtracks = more efficient search!
+    </div>
+    <div class="controls">
+      <div class="size-btns">
+        <button class="size-btn" data-size="4">4</button>
+        <button class="size-btn" data-size="6">6</button>
+        <button class="size-btn active" data-size="8">8</button>
+      </div>
+      <button class="btn" id="btStep">Step</button>
+      <button class="btn" id="btAuto">Auto-play</button>
+      <button class="btn" id="btReset">Reset</button>
+      <div class="speed-control">
+        <label>Speed:</label>
+        <input type="range" id="btSpeed" min="50" max="1000" value="300" step="50">
+        <span id="btSpeedVal">300ms</span>
+      </div>
+    </div>
+    <div class="stats-row" id="btStats">
+      <div class="stat">Assignments: <span id="btAssign">0</span></div>
+      <div class="stat">Backtracks: <span id="btBacktracks">0</span></div>
+    </div>
+    <div class="counter" id="btCounter"></div>
+    <div class="board-container">
+      <div class="board-wrap">
+        <div class="board" id="board2"></div>
+      </div>
+      <div class="sidebar" id="cspSidebar2">
+        <h3>CSP Formulation</h3>
+        <div class="csp-section">
+          <h4>Variables</h4>
+          <div id="cspVars2"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Domains</h4>
+          <div id="cspDoms2"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Constraints</h4>
+          <div id="cspCons2"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Current Assignment</h4>
+          <div class="assignment-live" id="cspAssign2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE 3: Forward Checking -->
+  <div class="mode-panel" id="mode3">
+    <details class="instructions">
+      <summary>📖 How to Play</summary>
+      <div class="instructions-content">
+        <p><strong>Objective:</strong> See how Forward Checking improves upon basic backtracking by eliminating impossible values early.</p>
+        <p><strong>Rules:</strong> After each queen placement, future columns have their invalid rows greyed out (domain reduction). If any future column has 0 valid rows left, the algorithm backtracks immediately without trying further.</p>
+        <p><strong>AI Concept:</strong> Forward Checking propagates constraints after each assignment, reducing future domains. This detects failures earlier than basic backtracking → fewer backtracks needed.</p>
+      </div>
+    </details>
+    <div class="goal-box">
+      ⚡ <strong>Key insight:</strong> Grey squares = values eliminated by Forward Checking. When a column has 0 remaining values → early backtrack (no need to try). Compare backtrack counts: FC should need far fewer than basic backtracking!
+    </div>
+    <div class="controls">
+      <div class="size-btns">
+        <button class="size-btn" data-size="4">4</button>
+        <button class="size-btn" data-size="6">6</button>
+        <button class="size-btn active" data-size="8">8</button>
+      </div>
+      <button class="btn" id="fcStep">Step</button>
+      <button class="btn" id="fcAuto">Auto-play</button>
+      <button class="btn" id="fcReset">Reset</button>
+      <div class="speed-control">
+        <label>Speed:</label>
+        <input type="range" id="fcSpeed" min="50" max="1000" value="300" step="50">
+        <span id="fcSpeedVal">300ms</span>
+      </div>
+    </div>
+    <div class="stats-row" id="fcStats">
+      <div class="stat">Assignments: <span id="fcAssign">0</span></div>
+      <div class="stat">Backtracks: <span id="fcBacktracks">0</span></div>
+      <div class="stat">Without FC backtracks: <span id="fcWithoutFC">—</span></div>
+    </div>
+    <div class="counter" id="fcCounter"></div>
+    <div class="board-container">
+      <div class="board-wrap">
+        <div class="board" id="board3"></div>
+      </div>
+      <div class="sidebar" id="cspSidebar3">
+        <h3>CSP Formulation</h3>
+        <div class="csp-section">
+          <h4>Variables</h4>
+          <div id="cspVars3"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Domains (Live)</h4>
+          <div class="domain-info" id="cspDomains3"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Constraints</h4>
+          <div id="cspCons3"></div>
+        </div>
+        <div class="csp-section">
+          <h4>Current Assignment</h4>
+          <div class="assignment-live" id="cspAssign3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE 4: CSP Formulation -->
+  <div class="mode-panel" id="mode4">
+    <details class="instructions">
+      <summary>📖 How to Play</summary>
+      <div class="instructions-content">
+        <p><strong>Objective:</strong> See the formal CSP formulation update live as the puzzle is solved.</p>
+        <p><strong>Rules:</strong> This panel shows the mathematical representation: Variables (X₁..Xₙ), Domains (1..n), and Constraints. The "Current Assignment" updates as queens are placed in any mode.</p>
+        <p><strong>AI Concept:</strong> Every CSP has 3 components: Variables, Domains, and Constraints. The 8-Queens CSP has n variables (one per column), each with domain {1..n}, and constraints ensuring no attacks.</p>
+      </div>
+    </details>
+    <div class="goal-box">
+      📝 <strong>Reading the CSP:</strong> Variables (Xᵢ) = one queen per column. Domain = possible rows. Constraints = the "no attack" rules. Current Assignment shows what's been decided so far. This IS how you write CSP answers in exams!
+    </div>
+    <div class="csp-full">
+      <h3>CSP Formulation of N-Queens</h3>
+      <div class="csp-block">
+        <h4>Variables</h4>
+        <code id="m4Vars">X = {Q₁, Q₂, Q₃, Q₄, Q₅, Q₆, Q₇, Q₈}</code>
+      </div>
+      <div class="csp-block">
+        <h4>Domains</h4>
+        <code id="m4Doms">D(Qᵢ) = {1, 2, 3, 4, 5, 6, 7, 8}  for all i ∈ {1..8}</code>
+      </div>
+      <div class="csp-block">
+        <h4>Constraints</h4>
+        <code id="m4Cons">For all i ≠ j:
+  Qᵢ ≠ Qⱼ              (no two queens in same row)
+  |Qᵢ - Qⱼ| ≠ |i - j|  (no two queens on same diagonal)</code>
+      </div>
+      <div class="csp-block">
+        <h4>Why one variable per column?</h4>
+        <code>Placing exactly one queen per column reduces the problem
+from choosing 64 squares to choosing 8 row-values.
+Each variable Qᵢ represents the row of the queen in column i.</code>
+      </div>
+      <div class="csp-block">
+        <h4>Constraint Graph</h4>
+        <code>Every pair of variables is constrained → complete graph
+Total constraints: C(n,2) × 2 (row + both diagonals)
+For n=8: 56 constraint pairs</code>
+      </div>
+      <div class="csp-block">
+        <h4>Live Assignment (from Mode 2 or 3)</h4>
+        <div class="assignment-live" id="m4LiveAssign" style="margin-top:0.5rem;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE 5: Comparison -->
+  <div class="mode-panel" id="mode5">
+    <details class="instructions">
+      <summary>📖 How to Play</summary>
+      <div class="instructions-content">
+        <p><strong>Objective:</strong> Compare the efficiency of different CSP solving algorithms on the same problem.</p>
+        <p><strong>Rules:</strong> Click "Run All" to execute Backtracking, Forward Checking, and FC+MRV on the current board size. The results show assignments tried, backtracks needed, and time taken.</p>
+        <p><strong>AI Concept:</strong> MRV (Minimum Remaining Values) picks the most constrained variable next, dramatically reducing search. FC+MRV combines domain pruning with smart variable ordering.</p>
+      </div>
+    </details>
+    <div class="goal-box">
+      📊 <strong>How to interpret:</strong> Lower assignments = smarter search. Lower backtracks = better pruning. FC+MRV should beat both plain Backtracking and FC alone. The bar chart makes this visually obvious — shorter bars = more efficient!
+    </div>
+    <div class="controls">
+      <div class="size-btns">
+        <button class="size-btn" data-size="4">4</button>
+        <button class="size-btn" data-size="6">6</button>
+        <button class="size-btn active" data-size="8">8</button>
+      </div>
+      <button class="btn primary" id="runAll">▶ Run All Algorithms</button>
+    </div>
+    <div id="compResults" style="max-width:700px;margin:0 auto;">
+      <table class="comp-table" id="compTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Algorithm</th>
+            <th>Assignments</th>
+            <th>Backtracks</th>
+            <th>Time (ms)</th>
+          </tr>
+        </thead>
+        <tbody id="compBody"></tbody>
+      </table>
+      <div class="bar-chart" id="barChart" style="display:none;"></div>
+      <div id="compNote" style="text-align:center;color:var(--text-dim);font-size:0.8rem;margin-top:0.5rem;"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Built for S5 CSE students | NSS College of Engineering, Palakkad
+</footer>
+
+<script>
+// ===================== GLOBALS =====================
+let boardSize = 8;
+const queenSymbol = '♛';
+
+// ===================== TAB NAVIGATION =====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.mode-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('mode' + btn.dataset.mode).classList.add('active');
+  });
+});
+
+// ===================== BOARD RENDERING =====================
+function createBoard(containerId, size, clickHandler) {
+  const board = document.getElementById(containerId);
+  board.innerHTML = '';
+  board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+  board.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      if (clickHandler) cell.addEventListener('click', () => clickHandler(r, c));
+      board.appendChild(cell);
+    }
+  }
+  return board;
+}
+
+function getCell(boardId, r, c) {
+  const board = document.getElementById(boardId);
+  return board.children[r * boardSize + c];
+}
+
+function renderQueens(boardId, queens, size) {
+  // Clear all queens and classes
+  const board = document.getElementById(boardId);
+  for (const cell of board.children) {
+    const q = cell.querySelector('.queen');
+    if (q) q.remove();
+    cell.classList.remove('threatened', 'fc-eliminated', 'current-col');
+  }
+  // Place queens
+  for (let c = 0; c < size; c++) {
+    if (queens[c] !== undefined && queens[c] !== null && queens[c] >= 0) {
+      const cell = board.children[queens[c] * size + c];
+      const span = document.createElement('span');
+      span.className = 'queen';
+      span.textContent = queenSymbol;
+      cell.appendChild(span);
+    }
+  }
+}
+
+function showThreats(boardId, queens, size) {
+  const board = document.getElementById(boardId);
+  // Mark threatened squares
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const cell = board.children[r * size + c];
+      cell.classList.remove('threatened');
+      for (let qc = 0; qc < size; qc++) {
+        if (queens[qc] === undefined || queens[qc] === null || queens[qc] < 0) continue;
+        const qr = queens[qc];
+        if (qr === r && qc === c) continue; // queen's own square
+        // Same row
+        if (qr === r) { cell.classList.add('threatened'); continue; }
+        // Same diagonal
+        if (Math.abs(qr - r) === Math.abs(qc - c)) { cell.classList.add('threatened'); continue; }
+      }
+    }
+  }
+}
+
+function countConflicts(queens, size) {
+  let conflicts = 0;
+  for (let i = 0; i < size; i++) {
+    if (queens[i] === undefined || queens[i] === null || queens[i] < 0) continue;
+    for (let j = i + 1; j < size; j++) {
+      if (queens[j] === undefined || queens[j] === null || queens[j] < 0) continue;
+      if (queens[i] === queens[j]) conflicts++;
+      if (Math.abs(queens[i] - queens[j]) === Math.abs(i - j)) conflicts++;
+    }
+  }
+  return conflicts;
+}
+
+// ===================== CSP SIDEBAR UPDATE =====================
+function updateCSPSidebar(modeNum, size, queens) {
+  const varsEl = document.getElementById('cspVars' + modeNum);
+  const domsEl = document.getElementById('cspDoms' + modeNum);
+  const consEl = document.getElementById('cspCons' + modeNum);
+  const assignEl = document.getElementById('cspAssign' + modeNum);
+
+  if (varsEl) {
+    const subs = '₁₂₃₄₅₆₇₈';
+    let html = 'X = {';
+    for (let i = 0; i < size; i++) {
+      html += 'Q' + subs[i];
+      if (i < size - 1) html += ', ';
+    }
+    html += '}';
+    varsEl.textContent = html;
+  }
+  if (domsEl) {
+    let html = 'D(Qᵢ) = {';
+    for (let i = 1; i <= size; i++) html += i + (i < size ? ',' : '');
+    html += '}  ∀i';
+    domsEl.textContent = html;
+  }
+  if (consEl) {
+    consEl.innerHTML = 'Qᵢ ≠ Qⱼ<br>|Qᵢ−Qⱼ| ≠ |i−j|<br>∀ i≠j';
+  }
+  if (assignEl) {
+    assignEl.innerHTML = '';
+    const subs = '₁₂₃₄₅₆₇₈';
+    for (let c = 0; c < size; c++) {
+      if (queens[c] !== undefined && queens[c] !== null && queens[c] >= 0) {
+        const span = document.createElement('span');
+        span.className = 'asgn';
+        span.textContent = 'Q' + subs[c] + '=' + (queens[c] + 1);
+        assignEl.appendChild(span);
+      }
+    }
+    if (assignEl.children.length === 0) {
+      assignEl.textContent = '(empty)';
+    }
+  }
+}
+
+// ===================== MODE 1: FREE PLAY =====================
+let freeQueens = [];
+let freeSize = 8;
+
+function initFreePlay(size) {
+  freeSize = size;
+  boardSize = size;
+  freeQueens = new Array(size).fill(null);
+  createBoard('board1', size, freePlayClick);
+  updateFreePlay();
+  updateCSPSidebar(1, size, freeQueens);
+}
+
+function freePlayClick(r, c) {
+  if (freeQueens[c] === r) {
+    freeQueens[c] = null; // remove
+  } else {
+    freeQueens[c] = r; // place/replace
+  }
+  updateFreePlay();
+  updateCSPSidebar(1, freeSize, freeQueens);
+  // Update mode 4 live if visible
+  updateM4Live(freeQueens, freeSize);
+}
+
+function updateFreePlay() {
+  renderQueens('board1', freeQueens, freeSize);
+  showThreats('board1', freeQueens, freeSize);
+  const conflicts = countConflicts(freeQueens, freeSize);
+  const placed = freeQueens.filter(q => q !== null && q >= 0).length;
+  const counter = document.getElementById('mode1Counter');
+  if (placed === freeSize && conflicts === 0) {
+    counter.innerHTML = '<span class="solved">✓ Solved! 0 conflicts — N-Queens complete!</span>';
+  } else {
+    counter.innerHTML = `<span class="conflict-count">${conflicts} conflict${conflicts !== 1 ? 's' : ''} remaining</span> | ${placed}/${freeSize} queens placed`;
+  }
+}
+
+// Size buttons for mode 1
+document.querySelectorAll('#mode1 .size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mode1 .size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    initFreePlay(parseInt(btn.dataset.size));
+  });
+});
+document.getElementById('clearBoard').addEventListener('click', () => initFreePlay(freeSize));
+
+// ===================== MODE 2: BACKTRACKING VISUALIZER =====================
+let btState = null;
+let btAutoInterval = null;
+let btSize = 8;
+
+function initBT(size) {
+  btSize = size;
+  boardSize = size;
+  stopBTAuto();
+  btState = {
+    queens: new Array(size).fill(null),
+    col: 0,
+    row: 0,
+    assignments: 0,
+    backtracks: 0,
+    done: false,
+    solved: false,
+    history: [] // stack of {col, row} for visualization
+  };
+  createBoard('board2', size, null);
+  updateBTDisplay();
+  updateCSPSidebar(2, size, btState.queens);
+}
+
+function btIsValid(queens, col, row) {
+  for (let c = 0; c < col; c++) {
+    if (queens[c] === null) continue;
+    if (queens[c] === row) return false;
+    if (Math.abs(queens[c] - row) === Math.abs(c - col)) return false;
+  }
+  return true;
+}
+
+function btStep() {
+  if (!btState || btState.done) return;
+  const s = btState;
+  const size = btSize;
+
+  // Find next column to assign (leftmost unassigned)
+  let col = -1;
+  for (let c = 0; c < size; c++) {
+    if (s.queens[c] === null) { col = c; break; }
+  }
+  if (col === -1) { s.done = true; s.solved = true; updateBTDisplay(); return; }
+
+  // Try next row in current column
+  let startRow = s.row;
+  let found = false;
+  for (let r = startRow; r < size; r++) {
+    if (btIsValid(s.queens, col, r)) {
+      s.queens[col] = r;
+      s.assignments++;
+      s.history.push({ col, row: r, type: 'place' });
+      s.row = 0; // next column starts from row 0
+      found = true;
+      // Flash the placed cell
+      const cell = getCell('board2', r, col);
+      cell.classList.add('backtrack-flash');
+      setTimeout(() => cell.classList.remove('backtrack-flash'), 400);
+      break;
+    }
+  }
+
+  if (!found) {
+    // Backtrack
+    s.backtracks++;
+    s.history.push({ col, type: 'backtrack' });
+    // Find last assigned column before this one
+    let prevCol = -1;
+    for (let c = col - 1; c >= 0; c--) {
+      if (s.queens[c] !== null) { prevCol = c; break; }
+    }
+    if (prevCol === -1) {
+      // Can't backtrack further — no solution from this path (shouldn't happen for valid N)
+      s.done = true;
+      s.solved = false;
+      updateBTDisplay();
+      return;
+    }
+    // Remove queen from prevCol and advance its row
+    const prevRow = s.queens[prevCol];
+    s.queens[prevCol] = null;
+    s.row = prevRow + 1; // try next row in prevCol
+    // Flash backtrack
+    const cell = getCell('board2', prevRow, prevCol);
+    cell.classList.add('backtrack-flash');
+    setTimeout(() => cell.classList.remove('backtrack-flash'), 400);
+  }
+
+  // Check if all assigned
+  let allAssigned = true;
+  for (let c = 0; c < size; c++) {
+    if (s.queens[c] === null) { allAssigned = false; break; }
+  }
+  if (allAssigned) {
+    s.done = true;
+    s.solved = true;
+  }
+
+  updateBTDisplay();
+  updateCSPSidebar(2, size, s.queens);
+  updateM4Live(s.queens, size);
+}
+
+function updateBTDisplay() {
+  const s = btState;
+  if (!s) return;
+  renderQueens('board2', s.queens, btSize);
+  showThreats('board2', s.queens, btSize);
+  // Highlight current column
+  if (!s.done) {
+    let col = -1;
+    for (let c = 0; c < btSize; c++) {
+      if (s.queens[c] === null) { col = c; break; }
+    }
+    if (col >= 0) {
+      for (let r = 0; r < btSize; r++) {
+        getCell('board2', r, col).classList.add('current-col');
+      }
+    }
+  }
+  document.getElementById('btAssign').textContent = s.assignments;
+  document.getElementById('btBacktracks').textContent = s.backtracks;
+  const counter = document.getElementById('btCounter');
+  if (s.done && s.solved) {
+    counter.innerHTML = '<span class="solved">✓ Solution found!</span>';
+  } else if (s.done) {
+    counter.innerHTML = '<span class="conflict-count">No solution found (exhausted search)</span>';
+  } else {
+    const placed = s.queens.filter(q => q !== null).length;
+    counter.textContent = `Assigning column ${(() => { for(let c=0;c<btSize;c++) if(s.queens[c]===null) return c+1; return btSize; })()} • ${placed}/${btSize} placed`;
+  }
+}
+
+function stopBTAuto() {
+  if (btAutoInterval) { clearInterval(btAutoInterval); btAutoInterval = null; }
+  const btn = document.getElementById('btAuto');
+  if (btn) btn.textContent = 'Auto-play';
+}
+
+document.getElementById('btStep').addEventListener('click', () => { stopBTAuto(); btStep(); });
+document.getElementById('btAuto').addEventListener('click', () => {
+  if (btAutoInterval) { stopBTAuto(); return; }
+  const speed = parseInt(document.getElementById('btSpeed').value);
+  document.getElementById('btAuto').textContent = 'Pause';
+  btAutoInterval = setInterval(() => {
+    if (btState.done) { stopBTAuto(); return; }
+    btStep();
+  }, speed);
+});
+document.getElementById('btReset').addEventListener('click', () => initBT(btSize));
+document.getElementById('btSpeed').addEventListener('input', (e) => {
+  document.getElementById('btSpeedVal').textContent = e.target.value + 'ms';
+  if (btAutoInterval) {
+    stopBTAuto();
+    document.getElementById('btAuto').click(); // restart with new speed
+  }
+});
+
+document.querySelectorAll('#mode2 .size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mode2 .size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    initBT(parseInt(btn.dataset.size));
+  });
+});
+
+// ===================== MODE 3: FORWARD CHECKING VISUALIZER =====================
+let fcState = null;
+let fcAutoInterval = null;
+let fcSize = 8;
+let fcWithoutFCCount = 0;
+
+function initFC(size) {
+  fcSize = size;
+  boardSize = size;
+  stopFCAuto();
+
+  // First run plain backtracking to get backtrack count for comparison
+  fcWithoutFCCount = runPlainBT(size).backtracks;
+
+  // Initialize domains: each column has all rows available
+  const domains = [];
+  for (let c = 0; c < size; c++) {
+    domains[c] = new Set();
+    for (let r = 0; r < size; r++) domains[c].add(r);
+  }
+
+  fcState = {
+    queens: new Array(size).fill(null),
+    domains: domains,
+    col: 0,
+    assignments: 0,
+    backtracks: 0,
+    done: false,
+    solved: false,
+    eliminatedCells: [] // track which cells are FC-eliminated
+  };
+  createBoard('board3', size, null);
+  updateFCDisplay();
+  updateCSPSidebar(3, size, fcState.queens);
+  updateFCDomains();
+}
+
+function runPlainBT(size) {
+  let assignments = 0, backtracks = 0;
+  function solve(col, queens) {
+    if (col === size) return true;
+    for (let r = 0; r < size; r++) {
+      assignments++;
+      if (btIsValid(queens, col, r)) {
+        queens[col] = r;
+        if (solve(col + 1, queens)) return true;
+        queens[col] = null;
+        backtracks++;
+      }
+    }
+    return false;
+  }
+  solve(0, new Array(size).fill(null));
+  return { assignments, backtracks };
+}
+
+function fcForwardCheck(queens, domains, assignedCol, size) {
+  // After assigning assignedCol, remove conflicting values from future domains
+  const assignedRow = queens[assignedCol];
+  for (let c = assignedCol + 1; c < size; c++) {
+    if (queens[c] !== null) continue; // already assigned
+    const newDom = new Set();
+    for (const r of domains[c]) {
+      // Check conflict with the just-assigned queen
+      if (r === assignedRow) continue; // same row
+      if (Math.abs(r - assignedRow) === Math.abs(c - assignedCol)) continue; // same diagonal
+      newDom.add(r);
+    }
+    domains[c] = newDom;
+  }
+}
+
+function fcStep() {
+  if (!fcState || fcState.done) return;
+  const s = fcState;
+  const size = fcSize;
+
+  // Find next unassigned column
+  let col = -1;
+  for (let c = 0; c < size; c++) {
+    if (s.queens[c] === null) { col = c; break; }
+  }
+  if (col === -1) { s.done = true; s.solved = true; updateFCDisplay(); return; }
+
+  // Try to assign: pick first available row from domain
+  const domain = s.domains[col];
+  if (domain.size === 0) {
+    // Domain wipeout — must backtrack
+    s.backtracks++;
+    // Find previous assigned column
+    let prevCol = -1;
+    for (let c = col - 1; c >= 0; c--) {
+      if (s.queens[c] !== null) { prevCol = c; break; }
+    }
+    if (prevCol === -1) {
+      s.done = true;
+      s.solved = false;
+      updateFCDisplay();
+      return;
+    }
+    // Remove queen from prevCol
+    s.queens[prevCol] = null;
+    // Rebuild domains from scratch based on current assignments
+    rebuildDomains(s, size);
+    // The prevCol is now unassigned, it will be retried
+    updateFCDisplay();
+    updateFCDomains();
+    updateCSPSidebar(3, size, s.queens);
+    return;
+  }
+
+  // Pick first row from domain
+  const row = domain.values().next().value;
+  s.queens[col] = row;
+  s.assignments++;
+  // Remove from domain
+  domain.delete(row);
+
+  // Forward check: prune future domains
+  fcForwardCheck(s.queens, s.domains, col, size);
+
+  // Check if any future unassigned column has empty domain
+  let domainWipeout = false;
+  for (let c = col + 1; c < size; c++) {
+    if (s.queens[c] === null && s.domains[c].size === 0) {
+      domainWipeout = true;
+      break;
+    }
+  }
+
+  if (domainWipeout) {
+    // Will trigger backtrack on next step
+  }
+
+  // Check if all assigned
+  let allAssigned = true;
+  for (let c = 0; c < size; c++) {
+    if (s.queens[c] === null) { allAssigned = false; break; }
+  }
+  if (allAssigned) {
+    s.done = true;
+    s.solved = true;
+  }
+
+  updateFCDisplay();
+  updateFCDomains();
+  updateCSPSidebar(3, size, s.queens);
+  updateM4Live(s.queens, size);
+}
+
+function rebuildDomains(s, size) {
+  // Reset all domains for unassigned columns, then apply constraints from all assigned
+  for (let c = 0; c < size; c++) {
+    if (s.queens[c] !== null) {
+      s.domains[c] = new Set([s.queens[c]]);
+    } else {
+      s.domains[c] = new Set();
+      for (let r = 0; r < size; r++) s.domains[c].add(r);
+    }
+  }
+  // Apply forward checking from each assigned column
+  for (let c = 0; c < size; c++) {
+    if (s.queens[c] === null) continue;
+    for (let fc = c + 1; fc < size; fc++) {
+      if (s.queens[fc] !== null) continue;
+      const newDom = new Set();
+      for (const r of s.domains[fc]) {
+        if (r === s.queens[c]) continue;
+        if (Math.abs(r - s.queens[c]) === Math.abs(fc - c)) continue;
+        newDom.add(r);
+      }
+      s.domains[fc] = newDom;
+    }
+  }
+}
+
+function updateFCDisplay() {
+  const s = fcState;
+  if (!s) return;
+  renderQueens('board3', s.queens, fcSize);
+  showThreats('board3', s.queens, fcSize);
+
+  // Show FC-eliminated cells
+  const board = document.getElementById('board3');
+  for (let c = 0; c < fcSize; c++) {
+    if (s.queens[c] !== null) continue;
+    for (let r = 0; r < fcSize; r++) {
+      const cell = getCell('board3', r, c);
+      if (!s.domains[c].has(r) && s.queens[c] === null) {
+        cell.classList.add('fc-eliminated');
+      }
+    }
+  }
+
+  // Highlight current column
+  if (!s.done) {
+    let col = -1;
+    for (let c = 0; c < fcSize; c++) {
+      if (s.queens[c] === null) { col = c; break; }
+    }
+    if (col >= 0) {
+      for (let r = 0; r < fcSize; r++) {
+        getCell('board3', r, col).classList.add('current-col');
+      }
+    }
+  }
+
+  document.getElementById('fcAssign').textContent = s.assignments;
+  document.getElementById('fcBacktracks').textContent = s.backtracks;
+  document.getElementById('fcWithoutFC').textContent = fcWithoutFCCount;
+  const counter = document.getElementById('fcCounter');
+  if (s.done && s.solved) {
+    counter.innerHTML = '<span class="solved">✓ Solution found with Forward Checking!</span>';
+  } else if (s.done) {
+    counter.innerHTML = '<span class="conflict-count">Search exhausted</span>';
+  } else {
+    const placed = s.queens.filter(q => q !== null).length;
+    counter.textContent = `FC: ${placed}/${fcSize} placed • Domains being pruned`;
+  }
+}
+
+function updateFCDomains() {
+  const s = fcState;
+  if (!s) return;
+  const container = document.getElementById('cspDomains3');
+  container.innerHTML = '';
+  const subs = '₁₂₃₄₅₆₇₈';
+  for (let c = 0; c < fcSize; c++) {
+    const row = document.createElement('div');
+    row.className = 'dom-row';
+    const label = document.createElement('span');
+    label.className = 'dom-label';
+    label.textContent = 'Col ' + (c + 1) + ':';
+    const val = document.createElement('span');
+    val.className = 'dom-val';
+    if (s.queens[c] !== null) {
+      val.textContent = 'assigned → row ' + (s.queens[c] + 1);
+      val.style.color = 'var(--success)';
+    } else {
+      val.textContent = s.domains[c].size + ' rows available';
+      if (s.domains[c].size === 0) val.style.color = 'var(--danger)';
+      else if (s.domains[c].size <= 2) val.style.color = 'var(--accent2)';
+    }
+    row.appendChild(label);
+    row.appendChild(val);
+    container.appendChild(row);
+  }
+}
+
+function stopFCAuto() {
+  if (fcAutoInterval) { clearInterval(fcAutoInterval); fcAutoInterval = null; }
+  const btn = document.getElementById('fcAuto');
+  if (btn) btn.textContent = 'Auto-play';
+}
+
+document.getElementById('fcStep').addEventListener('click', () => { stopFCAuto(); fcStep(); });
+document.getElementById('fcAuto').addEventListener('click', () => {
+  if (fcAutoInterval) { stopFCAuto(); return; }
+  const speed = parseInt(document.getElementById('fcSpeed').value);
+  document.getElementById('fcAuto').textContent = 'Pause';
+  fcAutoInterval = setInterval(() => {
+    if (fcState.done) { stopFCAuto(); return; }
+    fcStep();
+  }, speed);
+});
+document.getElementById('fcReset').addEventListener('click', () => initFC(fcSize));
+document.getElementById('fcSpeed').addEventListener('input', (e) => {
+  document.getElementById('fcSpeedVal').textContent = e.target.value + 'ms';
+  if (fcAutoInterval) { stopFCAuto(); document.getElementById('fcAuto').click(); }
+});
+
+document.querySelectorAll('#mode3 .size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mode3 .size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    initFC(parseInt(btn.dataset.size));
+  });
+});
+
+// ===================== MODE 4: CSP PANEL =====================
+function updateM4Live(queens, size) {
+  const el = document.getElementById('m4LiveAssign');
+  if (!el) return;
+  el.innerHTML = '';
+  const subs = '₁₂₃₄₅₆₇₈';
+  let hasAny = false;
+  for (let c = 0; c < size; c++) {
+    if (queens[c] !== undefined && queens[c] !== null && queens[c] >= 0) {
+      hasAny = true;
+      const span = document.createElement('span');
+      span.className = 'asgn';
+      span.textContent = 'Q' + subs[c] + ' = ' + (queens[c] + 1);
+      el.appendChild(span);
+    }
+  }
+  if (!hasAny) el.textContent = '(no current assignment — play in Mode 2 or 3)';
+
+  // Update the variables and domains text for current size
+  document.getElementById('m4Vars').textContent = 'X = {' + 
+    Array.from({length: size}, (_, i) => 'Q' + '₁₂₃₄₅₆₇₈'[i]).join(', ') + '}';
+  document.getElementById('m4Doms').textContent = 'D(Qᵢ) = {' + 
+    Array.from({length: size}, (_, i) => i + 1).join(', ') + '}  for all i ∈ {1..' + size + '}';
+}
+
+// ===================== MODE 5: COMPARISON =====================
+let compSize = 8;
+
+// Backtracking with counters
+function solveBT(size) {
+  let assignments = 0, backtracks = 0;
+  const queens = new Array(size).fill(null);
+  const start = performance.now();
+
+  function solve(col) {
+    if (col === size) return true;
+    for (let r = 0; r < size; r++) {
+      assignments++;
+      if (btIsValid(queens, col, r)) {
+        queens[col] = r;
+        if (solve(col + 1)) return true;
+        queens[col] = null;
+        backtracks++;
+      }
+    }
+    return false;
+  }
+  solve(0);
+  const time = performance.now() - start;
+  return { assignments, backtracks, time: Math.round(time * 100) / 100 };
+}
+
+// Forward Checking with counters
+function solveFC(size) {
+  let assignments = 0, backtracks = 0;
+  const queens = new Array(size).fill(null);
+  const domains = [];
+  for (let c = 0; c < size; c++) {
+    domains[c] = new Set();
+    for (let r = 0; r < size; r++) domains[c].add(r);
+  }
+  const start = performance.now();
+
+  function fcPrune(queens, domains, col, size) {
+    const row = queens[col];
+    for (let c = col + 1; c < size; c++) {
+      if (queens[c] !== null) continue;
+      const newDom = new Set();
+      for (const r of domains[c]) {
+        if (r === row) continue;
+        if (Math.abs(r - row) === Math.abs(c - col)) continue;
+        newDom.add(r);
+      }
+      domains[c] = newDom;
+    }
+  }
+
+  function rebuild(queens, domains, size) {
+    for (let c = 0; c < size; c++) {
+      if (queens[c] !== null) { domains[c] = new Set([queens[c]]); }
+      else { domains[c] = new Set(); for (let r = 0; r < size; r++) domains[c].add(r); }
+    }
+    for (let c = 0; c < size; c++) {
+      if (queens[c] === null) continue;
+      for (let fc = c + 1; fc < size; fc++) {
+        if (queens[fc] !== null) continue;
+        const nd = new Set();
+        for (const r of domains[fc]) {
+          if (r === queens[c]) continue;
+          if (Math.abs(r - queens[c]) === Math.abs(fc - c)) continue;
+          nd.add(r);
+        }
+        domains[fc] = nd;
+      }
+    }
+  }
+
+  function solve(col) {
+    if (col === size) return true;
+    // Find unassigned with smallest domain (this is FC, not MRV — just go left to right)
+    const dom = domains[col];
+    if (dom.size === 0) { backtracks++; return false; }
+    for (const r of dom) {
+      assignments++;
+      queens[col] = r;
+      // Save domains
+      const savedDomains = domains.map(d => new Set(d));
+      fcPrune(queens, domains, col, size);
+      // Check for wipeout
+      let wipeout = false;
+      for (let c = col + 1; c < size; c++) {
+        if (queens[c] === null && domains[c].size === 0) { wipeout = true; break; }
+      }
+      if (!wipeout && solve(col + 1)) return true;
+      // Restore
+      queens[col] = null;
+      for (let c = 0; c < size; c++) domains[c] = savedDomains[c];
+      backtracks++;
+    }
+    return false;
+  }
+  solve(0);
+  const time = performance.now() - start;
+  return { assignments, backtracks, time: Math.round(time * 100) / 100 };
+}
+
+// FC + MRV
+function solveFCMRV(size) {
+  let assignments = 0, backtracks = 0;
+  const queens = new Array(size).fill(null);
+  const domains = [];
+  for (let c = 0; c < size; c++) {
+    domains[c] = new Set();
+    for (let r = 0; r < size; r++) domains[c].add(r);
+  }
+  const start = performance.now();
+
+  function fcPrune(queens, domains, col, size) {
+    const row = queens[col];
+    for (let c = 0; c < size; c++) {
+      if (c === col || queens[c] !== null) continue;
+      const newDom = new Set();
+      for (const r of domains[c]) {
+        if (r === row) continue;
+        if (Math.abs(r - row) === Math.abs(c - col)) continue;
+        newDom.add(r);
+      }
+      domains[c] = newDom;
+    }
+  }
+
+  function solve() {
+    // Find unassigned variable with MRV (smallest domain)
+    let minDom = Infinity, selCol = -1;
+    for (let c = 0; c < size; c++) {
+      if (queens[c] !== null) continue;
+      if (domains[c].size < minDom) { minDom = domains[c].size; selCol = c; }
+    }
+    if (selCol === -1) return true; // all assigned
+    if (minDom === 0) { backtracks++; return false; }
+
+    const col = selCol;
+    for (const r of domains[col]) {
+      assignments++;
+      queens[col] = r;
+      const savedDomains = domains.map(d => new Set(d));
+      fcPrune(queens, domains, col, size);
+      // Check wipeout
+      let wipeout = false;
+      for (let c = 0; c < size; c++) {
+        if (queens[c] === null && domains[c].size === 0) { wipeout = true; break; }
+      }
+      if (!wipeout && solve()) return true;
+      queens[col] = null;
+      for (let c = 0; c < size; c++) domains[c] = savedDomains[c];
+      backtracks++;
+    }
+    return false;
+  }
+  solve();
+  const time = performance.now() - start;
+  return { assignments, backtracks, time: Math.round(time * 100) / 100 };
+}
+
+function runComparison() {
+  const size = compSize;
+  const bt = solveBT(size);
+  const fc = solveFC(size);
+  const fcmrv = solveFCMRV(size);
+
+  const results = [
+    { name: 'Backtracking', ...bt },
+    { name: 'Forward Checking', ...fc },
+    { name: 'FC + MRV', ...fcmrv }
+  ];
+
+  // Show table
+  const table = document.getElementById('compTable');
+  const body = document.getElementById('compBody');
+  table.style.display = 'table';
+  body.innerHTML = '';
+  for (const r of results) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="color:var(--accent);font-weight:600">${r.name}</td>
+      <td>${r.assignments}</td><td>${r.backtracks}</td><td>${r.time}</td>`;
+    body.appendChild(tr);
+  }
+
+  // Bar chart (backtracks comparison)
+  const chart = document.getElementById('barChart');
+  chart.style.display = 'flex';
+  chart.innerHTML = '';
+  const maxVal = Math.max(...results.map(r => r.backtracks), 1);
+
+  // Backtracks chart
+  for (const r of results) {
+    const group = document.createElement('div');
+    group.className = 'bar-group';
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const h = Math.max(4, (r.backtracks / maxVal) * 160);
+    bar.style.height = h + 'px';
+    const val = document.createElement('span');
+    val.className = 'bar-val';
+    val.textContent = r.backtracks;
+    bar.appendChild(val);
+    const label = document.createElement('div');
+    label.className = 'bar-label';
+    label.textContent = r.name;
+    group.appendChild(bar);
+    group.appendChild(label);
+    chart.appendChild(group);
+  }
+
+  document.getElementById('compNote').textContent = 
+    `Results for ${size}-Queens • Lower backtracks = fewer failed paths explored`;
+}
+
+document.getElementById('runAll').addEventListener('click', () => {
+  document.getElementById('runAll').disabled = true;
+  document.getElementById('runAll').textContent = 'Running...';
+  setTimeout(() => {
+    runComparison();
+    document.getElementById('runAll').disabled = false;
+    document.getElementById('runAll').textContent = '▶ Run All Algorithms';
+  }, 50);
+});
+
+document.querySelectorAll('#mode5 .size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mode5 .size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    compSize = parseInt(btn.dataset.size);
+  });
+});
+
+// ===================== INIT =====================
+initFreePlay(8);
+initBT(8);
+initFC(8);
+updateM4Live(new Array(8).fill(null), 8);
+</script>
+<!-- ═══ delight:queen-cell-nudge BEGIN ═══ -->
+<style>
+/* kind:nudge trigger:hover target:.chessboard-cell.queen */
+@keyframes queenLift { 0%, 100% { transform: translateY(0); box-shadow: 0 0 0 rgba(0,0,0,0); } 50% { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); } } .chessboard-cell.queen:hover { animation: queenLift 300ms ease-out; } @media (prefers-reduced-motion: reduce) { .chessboard-cell.queen:hover { animation: none; } }
+</style>
+
+<!-- ═══ delight:queen-cell-nudge END ═══ -->
+</body>
+</html>
